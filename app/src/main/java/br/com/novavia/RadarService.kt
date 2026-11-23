@@ -128,24 +128,23 @@ class RadarService : AccessibilityService() {
             return
         }
         if (!enabled()) return
-        prefs.edit().putLong("last_99_event", System.currentTimeMillis())
-            .putString("last_99_state", "Evento da 99 recebido").apply()
+        prefs.edit().putLong("last_99_event", System.currentTimeMillis()).apply()
         val now = SystemClock.elapsedRealtime()
         if (now - lastEventAt < 450) return
         lastEventAt = now
-        val root = event.source ?: rootInActiveWindow ?: run { prefs.edit().putString("last_99_state", "Tela indisponível para acessibilidade").apply(); return }
+        val root = rootInActiveWindow?.takeIf { it.packageName?.toString() == pkg } ?: event.source ?: run { prefs.edit().putString("last_99_state", "Tela indisponível para acessibilidade").apply(); return }
         val lines = mutableListOf<String>()
         fun visit(node: AccessibilityNodeInfo?, depth: Int) {
             if (node == null || depth > 16 || lines.size >= 120) return
             node.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { lines.add(it) }
-            node.contentDescription?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { lines.add(it) }
+            node.contentDescription?.toString()?.trim()?.takeIf { it.isNotEmpty() && it != node.text?.toString()?.trim() }?.let { lines.add(it) }
             for (i in 0 until node.childCount) visit(node.getChild(i), depth + 1)
         }
         visit(root, 0)
         val offer = Analyzer.parse(lines.joinToString(" "), "99")
         prefs.edit().putString("last_99_state",
             if (offer == null) "Evento recebido, mas valor/km/tempo não identificados"
-            else "Oferta reconhecida").apply()
+            else "Oferta reconhecida").putInt("last_node_count", lines.size).apply()
         if (offer != null) {
             val timestamp = System.currentTimeMillis()
             prefs.edit().putLong("last_99_offer", timestamp).apply()
@@ -184,7 +183,7 @@ class RadarService : AccessibilityService() {
         currentOffer = if (offer == null) "Oferta ainda não reconhecida.\nAguardando valor, km e minutos visíveis."
         else {
             val cost = prefs.getString("cost", "0.80")?.toDoubleOrNull() ?: 0.8
-            "DADOS PARCIAIS • confirme o trajeto\n" +
+            (if (offer.partial) "DADOS PARCIAIS • confirme o trajeto\n" else { val k = prefs.getString("km","1.80")?.toDoubleOrNull() ?: 1.8; val h = prefs.getString("hour","35")?.toDoubleOrNull() ?: 35.0; if (offer.perKm >= k && offer.perHour >= h) "🟢 BOA CORRIDA\n" else if (offer.perKm >= k * 0.8 && offer.perHour >= h * 0.8) "🟡 CORRIDA REGULAR\n" else "🔴 ABAIXO DAS METAS\n" }) +
                 "${Analyzer.money(offer.price)} • ${offer.km} km • ${offer.minutes.toInt()} min\n" +
                 "${Analyzer.money(offer.perKm)}/km • ${Analyzer.money(offer.perHour)}/h\n" +
                 "Saldo parcial: ${Analyzer.money(offer.price - offer.km * cost)}"
