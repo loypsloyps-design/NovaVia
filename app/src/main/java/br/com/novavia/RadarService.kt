@@ -12,6 +12,8 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.TextView
+import org.json.JSONArray
+import org.json.JSONObject
 
 class RadarService : AccessibilityService() {
     private val manager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
@@ -20,6 +22,8 @@ class RadarService : AccessibilityService() {
     private var lastEventAt = 0L
     private var currentOffer = "Aguardando oferta da 99"
     private var expanded = false
+    private var lastOfferSignature = ""
+    private var lastOfferSavedAt = 0L
     private val prefs by lazy { getSharedPreferences("novavia", MODE_PRIVATE) }
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
     private fun enabled() = prefs.getBoolean("radar_99", false) && Settings.canDrawOverlays(this)
@@ -115,8 +119,7 @@ class RadarService : AccessibilityService() {
         ensureBubble()
         val pkg = event?.packageName?.toString() ?: return
         if (pkg != "com.app99.driver" && pkg != "com.taxis99") {
-            currentOffer = "Aguardando oferta da 99"
-            updatePanel()
+            if (currentOffer == "Aguardando oferta da 99") updatePanel()
             return
         }
         if (!enabled()) return
@@ -138,7 +141,35 @@ class RadarService : AccessibilityService() {
         prefs.edit().putString("last_99_state",
             if (offer == null) "Evento recebido, mas valor/km/tempo não identificados"
             else "Oferta reconhecida").apply()
-        if (offer != null) prefs.edit().putLong("last_99_offer", System.currentTimeMillis()).apply()
+        if (offer != null) {
+            val timestamp = System.currentTimeMillis()
+            prefs.edit().putLong("last_99_offer", timestamp).apply()
+            val signature = "${offer.price}|${offer.km}|${offer.minutes}"
+            if (signature != lastOfferSignature || timestamp - lastOfferSavedAt > 120000L) {
+                lastOfferSignature = signature
+                lastOfferSavedAt = timestamp
+                try {
+                    val history = JSONArray(prefs.getString("auto_history", "[]") ?: "[]")
+                    val item = JSONObject()
+                        .put("id", timestamp)
+                        .put("date", java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", java.util.Locale.US).format(java.util.Date(timestamp)))
+                        .put("platform", "99")
+                        .put("price", offer.price)
+                        .put("km", offer.km)
+                        .put("min", offer.minutes)
+                        .put("perKm", offer.perKm)
+                        .put("perHour", offer.perHour)
+                        .put("net", offer.price - offer.km * (prefs.getString("cost", "0.80")?.toDoubleOrNull() ?: 0.8))
+                        .put("rating", "partial")
+                        .put("partial", true)
+                    val updated = JSONArray().put(item)
+                    for (i in 0 until minOf(history.length(), 99)) updated.put(history.get(i))
+                    prefs.edit().putString("auto_history", updated.toString()).apply()
+                } catch (_: Exception) {
+                    prefs.edit().putString("last_99_state", "Oferta reconhecida; falha ao salvar histórico").apply()
+                }
+            }
+        }
         currentOffer = if (offer == null) "Oferta ainda não reconhecida.\nAguardando valor, km e minutos visíveis."
         else {
             val cost = prefs.getString("cost", "0.80")?.toDoubleOrNull() ?: 0.8
