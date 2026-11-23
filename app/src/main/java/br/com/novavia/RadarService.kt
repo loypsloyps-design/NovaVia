@@ -24,6 +24,8 @@ class RadarService : AccessibilityService() {
     private var bubble: TextView? = null
     private var panel: TextView? = null
     private var lastEventAt = 0L
+    private var lastRecognizedAt = 0L
+    private val retry = Runnable { scan99() }
     private var currentOffer = "Aguardando oferta da 99"
     private var expanded = false
     private var lastOfferSignature = ""
@@ -123,16 +125,21 @@ class RadarService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         ensureBubble()
         val pkg = event?.packageName?.toString() ?: return
-        if (pkg != "com.app99.driver" && pkg != "com.taxis99") {
+        if (pkg != "com.app99.driver") {
             if (currentOffer == "Aguardando oferta da 99") updatePanel()
             return
         }
         if (!enabled()) return
         prefs.edit().putLong("last_99_event", System.currentTimeMillis()).apply()
-        val now = SystemClock.elapsedRealtime()
-        if (now - lastEventAt < 450) return
-        lastEventAt = now
-        val root = rootInActiveWindow?.takeIf { it.packageName?.toString() == pkg } ?: event.source ?: run { prefs.edit().putString("last_99_state", "Tela indisponível para acessibilidade").apply(); return }
+        handler.removeCallbacks(retry)
+        handler.postDelayed(retry, 300)
+        if (SystemClock.elapsedRealtime() - lastEventAt >= 450) scan99()
+    }
+
+    private fun scan99() {
+        if (!enabled()) return
+        lastEventAt = SystemClock.elapsedRealtime()
+        val root = rootInActiveWindow?.takeIf { it.packageName?.toString() == "com.app99.driver" } ?: run { prefs.edit().putString("last_99_state", "Tela indisponível para acessibilidade").apply(); return }
         val lines = mutableListOf<String>()
         fun visit(node: AccessibilityNodeInfo?, depth: Int) {
             if (node == null || depth > 16 || lines.size >= 120) return
@@ -145,7 +152,9 @@ class RadarService : AccessibilityService() {
         prefs.edit().putString("last_99_state",
             if (offer == null) "Evento recebido, mas valor/km/tempo não identificados"
             else "Oferta reconhecida").putInt("last_node_count", lines.size).apply()
+        if (offer == null && SystemClock.elapsedRealtime() - lastRecognizedAt < 8000L) return
         if (offer != null) {
+            lastRecognizedAt = SystemClock.elapsedRealtime()
             val timestamp = System.currentTimeMillis()
             prefs.edit().putLong("last_99_offer", timestamp).apply()
             val signature = "${offer.price}|${offer.km}|${offer.minutes}"
@@ -168,7 +177,7 @@ class RadarService : AccessibilityService() {
                             val targetKm = prefs.getString("km", "1.80")?.toDoubleOrNull() ?: 1.8
                             val targetHour = prefs.getString("hour", "35")?.toDoubleOrNull() ?: 35.0
                             if (offer.perKm >= targetKm && offer.perHour >= targetHour) "good"
-                            else if (offer.perKm >= targetKm * 0.8 && offer.perHour >= targetHour * 0.8) "warn"
+                            else if (offer.perKm >= targetKm * 0.8 && offer.perHour >= targetHour * 0.8) "medium"
                             else "bad"
                         })
                         .put("partial", offer.partial)
@@ -198,5 +207,5 @@ class RadarService : AccessibilityService() {
         panel = null; bubble = null; expanded = false
     }
     override fun onInterrupt() = removeAll()
-    override fun onDestroy() { handler.removeCallbacks(heartbeat); removeAll(); super.onDestroy() }
+    override fun onDestroy() { handler.removeCallbacks(heartbeat); handler.removeCallbacks(retry); removeAll(); super.onDestroy() }
 }
