@@ -165,8 +165,14 @@ class RadarService : AccessibilityService() {
                         .put("perKm", offer.perKm)
                         .put("perHour", offer.perHour)
                         .put("net", offer.price - offer.km * (prefs.getString("cost", "0.80")?.toDoubleOrNull() ?: 0.8))
-                        .put("rating", "partial")
-                        .put("partial", true)
+                        .put("rating", if (offer.partial) "partial" else {
+                            val targetKm = prefs.getString("km", "1.80")?.toDoubleOrNull() ?: 1.8
+                            val targetHour = prefs.getString("hour", "35")?.toDoubleOrNull() ?: 35.0
+                            if (offer.perKm >= targetKm && offer.perHour >= targetHour) "good"
+                            else if (offer.perKm >= targetKm * 0.8 && offer.perHour >= targetHour * 0.8) "warn"
+                            else "bad"
+                        })
+                        .put("partial", offer.partial)
                     val updated = JSONArray().put(item)
                     for (i in 0 until minOf(history.length(), 99)) updated.put(history.get(i))
                     prefs.edit().putString("auto_history", updated.toString()).apply()
