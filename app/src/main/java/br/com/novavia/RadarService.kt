@@ -8,12 +8,10 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
-import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.TextView
-import android.widget.LinearLayout
 
 class RadarService : AccessibilityService() {
     private val manager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
@@ -52,14 +50,13 @@ class RadarService : AccessibilityService() {
                 elevation = dp(7).toFloat()
             }
             val lp = params(dp(54), dp(54), 210)
-            var startX = 0f
             var startY = 0f
             var originalY = 0
             var moved = false
             view.setOnTouchListener { _, event ->
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
-                        startX = event.rawX; startY = event.rawY
+                        startY = event.rawY
                         originalY = lp.y; moved = false; true
                     }
                     MotionEvent.ACTION_MOVE -> {
@@ -123,10 +120,12 @@ class RadarService : AccessibilityService() {
             return
         }
         if (!enabled()) return
+        prefs.edit().putLong("last_99_event", System.currentTimeMillis())
+            .putString("last_99_state", "Evento da 99 recebido").apply()
         val now = SystemClock.elapsedRealtime()
         if (now - lastEventAt < 450) return
         lastEventAt = now
-        val root = rootInActiveWindow ?: return
+        val root = rootInActiveWindow ?: run { prefs.edit().putString("last_99_state", "Tela indisponível para acessibilidade").apply(); return }
         val lines = mutableListOf<String>()
         fun visit(node: AccessibilityNodeInfo?, depth: Int) {
             if (node == null || depth > 16 || lines.size >= 120) return
@@ -136,6 +135,10 @@ class RadarService : AccessibilityService() {
         }
         visit(root, 0)
         val offer = Analyzer.parse(lines.joinToString(" "), "99")
+        prefs.edit().putString("last_99_state",
+            if (offer == null) "Evento recebido, mas valor/km/tempo não identificados"
+            else "Oferta reconhecida").apply()
+        if (offer != null) prefs.edit().putLong("last_99_offer", System.currentTimeMillis()).apply()
         currentOffer = if (offer == null) "Oferta ainda não reconhecida.\nAguardando valor, km e minutos visíveis."
         else {
             val cost = prefs.getString("cost", "0.80")?.toDoubleOrNull() ?: 0.8
