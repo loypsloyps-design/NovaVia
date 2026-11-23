@@ -68,6 +68,8 @@ class MainActivity:Activity(){
    result.put("lastState",prefs.getString("last_99_state","Sem eventos da 99"))
    return result.toString()
   }
+  @JavascriptInterface fun autoHistory():String = prefs.getString("auto_history", "[]") ?: "[]"
+  @JavascriptInterface fun clearAutoHistory() { prefs.edit().remove("auto_history").apply() }
   @JavascriptInterface fun radarPreference():Boolean=prefs.getBoolean("radar_99",false)
   @JavascriptInterface fun setRadarPreference(value:Boolean):Boolean{
    prefs.edit().putBoolean("radar_99",value).apply()
