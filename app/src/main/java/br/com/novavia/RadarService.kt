@@ -5,6 +5,8 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.SystemClock
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
@@ -17,6 +19,8 @@ import org.json.JSONObject
 
 class RadarService : AccessibilityService() {
     private val manager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
+    private val handler = Handler(Looper.getMainLooper())
+    private val heartbeat = object : Runnable { override fun run() { ensureBubble(); handler.postDelayed(this, 1200) } }
     private var bubble: TextView? = null
     private var panel: TextView? = null
     private var lastEventAt = 0L
@@ -103,7 +107,7 @@ class RadarService : AccessibilityService() {
                     maxWidth = resources.displayMetrics.widthPixels - dp(36)
                 }
                 manager.addView(view, params(WindowManager.LayoutParams.WRAP_CONTENT,
-                    WindowManager.LayoutParams.WRAP_CONTENT, 275))
+                    WindowManager.LayoutParams.WRAP_CONTENT, 275).apply { flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE })
                 panel = view
             }
             panel?.text = "NOVAVIA • RADAR 99\n$currentOffer\n\nToque na bolinha para fechar."
@@ -112,7 +116,8 @@ class RadarService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        ensureBubble()
+        handler.removeCallbacks(heartbeat)
+        handler.post(heartbeat)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -128,7 +133,7 @@ class RadarService : AccessibilityService() {
         val now = SystemClock.elapsedRealtime()
         if (now - lastEventAt < 450) return
         lastEventAt = now
-        val root = rootInActiveWindow ?: run { prefs.edit().putString("last_99_state", "Tela indisponível para acessibilidade").apply(); return }
+        val root = event.source ?: rootInActiveWindow ?: run { prefs.edit().putString("last_99_state", "Tela indisponível para acessibilidade").apply(); return }
         val lines = mutableListOf<String>()
         fun visit(node: AccessibilityNodeInfo?, depth: Int) {
             if (node == null || depth > 16 || lines.size >= 120) return
@@ -188,5 +193,5 @@ class RadarService : AccessibilityService() {
         panel = null; bubble = null; expanded = false
     }
     override fun onInterrupt() = removeAll()
-    override fun onDestroy() { removeAll(); super.onDestroy() }
+    override fun onDestroy() { handler.removeCallbacks(heartbeat); removeAll(); super.onDestroy() }
 }
