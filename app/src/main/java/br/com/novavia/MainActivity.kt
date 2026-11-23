@@ -5,6 +5,8 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.content.ComponentName
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.view.accessibility.AccessibilityManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -45,12 +47,26 @@ class MainActivity:Activity(){
    return JSONObject().put("rating",rating).put("perKm",offer.perKm).put("perHour",offer.perHour).put("net",price-km*cost).toString()
   }
   @JavascriptInterface fun overlay(){runOnUiThread{startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")))}}
-  @JavascriptInterface fun accessibility(){runOnUiThread{startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}}
+  @JavascriptInterface fun accessibility(){runOnUiThread{startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))}}
   @JavascriptInterface fun radarEnabled():Boolean{
    val enabled=Settings.Secure.getInt(contentResolver,Settings.Secure.ACCESSIBILITY_ENABLED,0)==1
    val services=Settings.Secure.getString(contentResolver,Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)?:return false
    val target=ComponentName(this@MainActivity,RadarService::class.java)
    return enabled&&services.split(':').any{ComponentName.unflattenFromString(it)==target}
+  }
+  @JavascriptInterface fun radarDiagnostic():String{
+   val result=JSONObject()
+   val am=getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
+   val service=am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+     .any{it.resolveInfo.serviceInfo.packageName==packageName && it.resolveInfo.serviceInfo.name.endsWith("RadarService")}
+   result.put("service",service)
+   result.put("overlay",Settings.canDrawOverlays(this@MainActivity))
+   result.put("requested",prefs.getBoolean("radar_99",false))
+   result.put("driverInstalled",packageManager.getLaunchIntentForPackage("com.app99.driver")!=null)
+   result.put("lastEvent",prefs.getLong("last_99_event",0L))
+   result.put("lastOffer",prefs.getLong("last_99_offer",0L))
+   result.put("lastState",prefs.getString("last_99_state","Sem eventos da 99"))
+   return result.toString()
   }
   @JavascriptInterface fun radarPreference():Boolean=prefs.getBoolean("radar_99",false)
   @JavascriptInterface fun setRadarPreference(value:Boolean):Boolean{
