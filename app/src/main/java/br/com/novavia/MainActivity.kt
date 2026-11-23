@@ -15,6 +15,7 @@ class MainActivity:Activity(){
   super.onCreate(savedInstanceState)
   web=WebView(this)
   web.settings.javaScriptEnabled=true
+  web.settings.domStorageEnabled=true
   web.settings.allowFileAccess=true
   web.webViewClient=WebViewClient()
   web.addJavascriptInterface(Bridge(),"NovaVia")
