@@ -4,6 +4,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AnalyzerTest {
+    @Test fun recognizesReal99MotoDeliveryTwoLegs() {
+        val offer = Analyzer.parse("Entrega Moto R$4,80 5,00 CPF verif. 10 min (2,2 km) 4 min (1,8 km) Aceitar", "99")
+        assertNotNull(offer)
+        assertEquals(4.80, offer!!.price, 0.001)
+        assertEquals(4.0, offer.km, 0.001)
+        assertEquals(14.0, offer.minutes, 0.001)
+        assertEquals(1.20, offer.perKm, 0.001)
+        assertEquals(4.8 * 60.0 / 14.0, offer.perHour, 0.001)
+        assertFalse(offer.partial)
+    }
+
+    @Test fun refusesIncompleteTwoLegOffer() {
+        assertNull(Analyzer.parse("R$4,80 10 min (2,2 km) 4 min", "99"))
+    }
+
     @Test fun recognizesSimpleOffer() {
         val offer = Analyzer.parse("Oferta 99 R$ 25,50 10 km 30 min", "99")
         assertNotNull(offer)
