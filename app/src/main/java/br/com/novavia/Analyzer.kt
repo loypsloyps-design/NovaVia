@@ -18,6 +18,7 @@ object Analyzer {
     private val kmRx = Regex("""\b([0-9]{1,3}(?:[.,][0-9]{1,2})?)\s*km\b""", RegexOption.IGNORE_CASE)
     private val minRx = Regex("""\b([0-9]{1,3})\s*(?:minutos?|min)\b""", RegexOption.IGNORE_CASE)
     private val segmentRx = Regex("""\b([0-9]{1,3})\s*(?:minutos?|min)\s*\(\s*([0-9]{1,3}(?:[.,][0-9]{1,2})?)\s*km\s*\)""", RegexOption.IGNORE_CASE)
+    private val reverseSegmentRx = Regex("""\b([0-9]{1,3}(?:[.,][0-9]{1,2})?)\s*km\s*\(\s*([0-9]{1,3})\s*(?:minutos?|min)\s*\)""", RegexOption.IGNORE_CASE)
     private fun number(s: String) = s.replace(',', '.').toDoubleOrNull()
 
     fun parse(text: String, source: String): Offer? {
@@ -26,14 +27,18 @@ object Analyzer {
         val price = prices.single()
         if (price !in 1.0..2000.0) return null
 
-        // 99 Entrega Moto: "10 min (2,2 km)" and "4 min (1,8 km)".
+        // Any modality with two explicit route segments: "10 min (2,2 km)" and "4 min (1,8 km)".
         // Accept exactly two complete segments; never combine unrelated figures.
         val segments = segmentRx.findAll(text).mapNotNull {
             val minutes = number(it.groupValues[1])
             val km = number(it.groupValues[2])
             if (minutes != null && km != null) Pair(minutes, km) else null
+        }.toList() + reverseSegmentRx.findAll(text).mapNotNull {
+            val km = number(it.groupValues[1])
+            val minutes = number(it.groupValues[2])
+            if (minutes != null && km != null) Pair(minutes, km) else null
         }.toList()
-        if (segments.size == 2) {
+        if (segments.size == 2 && kmRx.findAll(text).count() == 2 && minRx.findAll(text).count() == 2 && segments.all { it.first > 0 && it.second > 0 }) {
             val totalMinutes = segments.sumOf { it.first }
             val totalKm = segments.sumOf { it.second }
             if (totalMinutes in 1.0..600.0 && totalKm in 0.1..300.0)
