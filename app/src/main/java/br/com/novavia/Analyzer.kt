@@ -14,10 +14,10 @@ data class Offer(
 }
 
 object Analyzer {
-    private val priceRx = Regex("""R\\$\\s*([0-9]{1,4}(?:[.,][0-9]{1,2})?)""", RegexOption.IGNORE_CASE)
-    private val kmRx = Regex("""\\b([0-9]{1,3}(?:[.,][0-9]{1,2})?)\\s*km\\b""", RegexOption.IGNORE_CASE)
-    private val minRx = Regex("""\\b([0-9]{1,3})\\s*(?:minutos?|min)\\b""", RegexOption.IGNORE_CASE)
-    private val segmentRx = Regex("""\\b([0-9]{1,3})\\s*(?:minutos?|min)\\s*\\(\\s*([0-9]{1,3}(?:[.,][0-9]{1,2})?)\\s*km\\s*\\)""", RegexOption.IGNORE_CASE)
+    private val priceRx = Regex("""R\$\s*([0-9]{1,4}(?:[.,][0-9]{1,2})?)""", RegexOption.IGNORE_CASE)
+    private val kmRx = Regex("""\b([0-9]{1,3}(?:[.,][0-9]{1,2})?)\s*km\b""", RegexOption.IGNORE_CASE)
+    private val minRx = Regex("""\b([0-9]{1,3})\s*(?:minutos?|min)\b""", RegexOption.IGNORE_CASE)
+    private val segmentRx = Regex("""\b([0-9]{1,3})\s*(?:minutos?|min)\s*\(\s*([0-9]{1,3}(?:[.,][0-9]{1,2})?)\s*km\s*\)""", RegexOption.IGNORE_CASE)
     private fun number(s: String) = s.replace(',', '.').toDoubleOrNull()
 
     fun parse(text: String, source: String): Offer? {
