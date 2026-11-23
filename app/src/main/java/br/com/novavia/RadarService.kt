@@ -25,6 +25,7 @@ class RadarService : AccessibilityService() {
             "com.ubercab.driver" -> "Uber"
             else -> { hide(); return }
         }
+        if (source == "99" && !getSharedPreferences("novavia", MODE_PRIVATE).getBoolean("radar_99", false)) { hide(); return }
         val now = SystemClock.elapsedRealtime()
         if (now - lastEventAt < 350) return
         lastEventAt = now
