@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.content.ComponentName
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -45,6 +46,24 @@ class MainActivity:Activity(){
   }
   @JavascriptInterface fun overlay(){runOnUiThread{startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")))}}
   @JavascriptInterface fun accessibility(){runOnUiThread{startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}}
+  @JavascriptInterface fun radarEnabled():Boolean{
+   val enabled=Settings.Secure.getInt(contentResolver,Settings.Secure.ACCESSIBILITY_ENABLED,0)==1
+   val services=Settings.Secure.getString(contentResolver,Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)?:return false
+   val target=ComponentName(this@MainActivity,RadarService::class.java)
+   return enabled&&services.split(':').any{ComponentName.unflattenFromString(it)==target}
+  }
+  @JavascriptInterface fun radarPreference():Boolean=prefs.getBoolean("radar_99",false)
+  @JavascriptInterface fun setRadarPreference(value:Boolean):Boolean{
+   prefs.edit().putBoolean("radar_99",value).apply()
+   return true
+  }
+  @JavascriptInterface fun open99():Boolean{
+   val intent=packageManager.getLaunchIntentForPackage("com.app99.driver")
+    ?:packageManager.getLaunchIntentForPackage("com.taxis99")
+    ?:return false
+   runOnUiThread{startActivity(intent)}
+   return true
+  }
   @JavascriptInterface fun enabled():Boolean=Settings.canDrawOverlays(this@MainActivity)
  }
  override fun onDestroy(){web.removeJavascriptInterface("NovaVia");web.destroy();super.onDestroy()}
